@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Movie Recommender</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar / Header Area -->
+        <header class="app-header">
+            <div class="logo">
+                <span class="icon">🎬</span>
+                <h1>CineGuide AI</h1>
+            </div>
+            <p class="subtitle">Your intelligent companion for finding the perfect movie.</p>
+            <button id="clear-btn" class="utility-btn" title="Clear Conversation">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                </svg>
+                Clear History
+            </button>
+        </header>
+
+        <!-- Main Chat Area -->
+        <main class="chat-container">
+            <div id="chat-history" class="chat-history">
+                <!-- Welcome Message -->
+                <div class="message system-message">
+                    <div class="avatar">🤖</div>
+                    <div class="bubble">
+                        <p>Hello! I'm your movie recommendation assistant. I can help you find something great to watch.</p>
+                        <p>Try asking: <em>"Find me a thriller like Inception"</em> or <em>"I want a funny movie from the 90s"</em>.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Input Area -->
+            <div class="input-area">
+                <form id="chat-form">
+                    <div class="input-wrapper">
+                        <input type="text" id="user-input" placeholder="Type your request here..." autocomplete="off">
+                        <button type="submit" id="send-btn" disabled>
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="22" y1="2" x2="11" y2="13"></line>
+                                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                            </svg>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </main>
+    </div>
+    <script src="/static/js/script.js"></script>
+</body>
+</html>
