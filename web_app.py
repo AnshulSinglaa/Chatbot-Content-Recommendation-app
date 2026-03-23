@@ -11,23 +11,20 @@ from pydantic import BaseModel
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 from app import MovieRecommendationBot
-
+from cache import get_cache, set_cache, generate_query_hash
 app = FastAPI(title="Movie Recommendation Chatbot")
 
 # Initialize the bot
 bot = MovieRecommendationBot()
 # We need to initialize it. Data path is relative to the root where this script runs.
 # Reusing the logic from app.py main()
-data_path = "data/tmdb_top_movies_cleaned.csv"
-vector_store_path = "vector_store/faiss_index"
+DATA_PATH = os.getenv("DATA_PATH", "data/tmdb_top_movies_cleaned.csv")
 
 print("Initializing Chatbot...")
-if not os.path.exists(data_path):
-    print(f"Error: Dataset not found at {data_path}")
-    # In a real app we might want to fail harder, but for now let's just print
+if not os.path.exists(DATA_PATH):
+    print(f"Warning: Dataset not found at {DATA_PATH}. Run 'python download_data.py' first.")
 else:
-    # Check if we should force rebuild (could be an env var or arg, but acting simple here)
-    bot.initialize(data_path, force_rebuild=False)
+    bot.initialize(DATA_PATH, force_rebuild=False)
 
 # Serve static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -57,6 +54,21 @@ async def chat(request: ChatRequest):
         raise HTTPException(status_code=503, detail="System not initialized")
     
     try:
+        # Check cache for generic queries if history is not used
+        # We assume queries under 20 words are generic enough for caching
+        # Skip caching for very specific or follow up queries (handled by use_history and length check)
+        is_generic_query = not request.use_history and len(request.message.split()) < 20
+        cache_key = None
+        
+        if is_generic_query:
+            query_hash = generate_query_hash(request.message)
+            cache_key = f"llm:{query_hash}"
+            cached_response = get_cache(cache_key)
+            
+            if cached_response:
+                # Return cached response directly
+                return ChatResponse(**cached_response)
+
         # The bot's rag_pipeline.generate_recommendations returns a dict
         result = bot.rag_pipeline.generate_recommendations(
             request.message, 
@@ -80,6 +92,16 @@ async def chat(request: ChatRequest):
                     overview=rec.get('overview', '')
                 ))
                 
+        # Save to cache if applicable
+        if is_generic_query and cache_key:
+            # Cache the response for 1 hour (3600 seconds)
+            # Use model_dump() or dict() depending on pydantic version. We'll use dict() as it's safe for older versions.
+            try:
+                cache_data = response_data.model_dump()
+            except AttributeError:
+                cache_data = response_data.dict()
+            set_cache(cache_key, cache_data, expiry=3600)
+            
         return response_data
         
     except Exception as e:

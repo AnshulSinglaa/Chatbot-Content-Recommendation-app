@@ -7,11 +7,17 @@ __pycache__/
 venv/
 env/
 ENV/
-.venv
+.venv/
+*.zip
 
-# Vector Store
-vector_store/*.index
-vector_store/*.pkl
+# Data files — too large for git, download via download_data.py
+*.csv
+data/
+
+# Vector Store (rebuilt at runtime)
+vector_store/
+*.index
+*.pkl
 
 # Environment variables
 .env
@@ -30,12 +36,3 @@ Thumbs.db
 
 # Logs
 *.log
-
-# Data (optional - uncomment if you don't want to track data files)
-# data/*.csv
-
-.venv/
-*.zip
-data/
-
-.env

@@ -10,7 +10,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.messages import HumanMessage, SystemMessage
 from vector_store import VectorStore
 from mood_filter import MoodFilter
-
+from cache import get_cache, set_cache
 # Load environment variables from .env file
 load_dotenv()
 
@@ -103,8 +103,17 @@ class RAGPipeline:
         Returns:
             Dictionary with recommendations and explanations
         """
-        # Detect mood from query
-        detected_moods = self.mood_filter.detect_mood(query)
+        # Check cache for mood detection results
+        mood_cache_key = f"mood:{query.lower().strip()}"
+        cached_mood = get_cache(mood_cache_key)
+        
+        if cached_mood and "moods" in cached_mood:
+            detected_moods = cached_mood["moods"]
+        else:
+            # Detect mood from query
+            detected_moods = self.mood_filter.detect_mood(query)
+            # Cache mood detection results for 24 hours (86400 seconds)
+            set_cache(mood_cache_key, {"moods": detected_moods}, expiry=86400)
         
         # Retrieve relevant movies
         retrieved_movies = self.retrieve_movies(query, k=15)  # Retrieve more, then filter

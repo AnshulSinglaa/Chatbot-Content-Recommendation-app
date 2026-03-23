@@ -6,17 +6,15 @@ import os
 import sys
 from pathlib import Path
 from dotenv import load_dotenv
+from data_loader import DataLoader
+from vector_store import VectorStore
+from rag_pipeline import RAGPipeline
 
 # Load environment variables
 load_dotenv()
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
-
-from data_loader import DataLoader
-from vector_store import VectorStore
-from rag_pipeline import RAGPipeline
-
 
 class MovieRecommendationBot:
     """Main chatbot application."""
