@@ -33,9 +33,15 @@ class MoodFilter:
         'Documentary': ['thoughtful', 'inspiring']
     }
     
+    # Words that negate the following mood keyword
+    NEGATION_WORDS = {'not', "don't", "dont", 'no', 'never', 'without', 'hardly', "doesn't", "isn't", "wasn't"}
+
     def detect_mood(self, query: str) -> List[str]:
         """
-        Detect mood(s) from user query.
+        Detect mood(s) from user query, accounting for negation.
+        
+        "I want a happy movie"         → ['funny']
+        "I don't want a happy movie"   → [] (funny excluded)
         
         Args:
             query: User query string
@@ -44,13 +50,36 @@ class MoodFilter:
             List of detected moods
         """
         query_lower = query.lower()
+        words = query_lower.split()
         detected_moods = []
+        negated_moods = []
         
         for mood, keywords in self.MOOD_KEYWORDS.items():
-            if any(keyword in query_lower for keyword in keywords):
-                detected_moods.append(mood)
+            for keyword in keywords:
+                if keyword in query_lower:
+                    # Check if a negation word appears within 3 words before the keyword
+                    try:
+                        # Find keyword position in word list
+                        kw_indices = [i for i, w in enumerate(words) if keyword in w]
+                        is_negated = False
+                        for ki in kw_indices:
+                            lookback = words[max(0, ki - 3):ki]
+                            if any(neg in lookback for neg in self.NEGATION_WORDS):
+                                is_negated = True
+                                break
+                        
+                        if is_negated:
+                            negated_moods.append(mood)
+                        else:
+                            detected_moods.append(mood)
+                    except (ValueError, IndexError):
+                        detected_moods.append(mood)
+                    break  # One keyword match per mood is enough
         
-        return detected_moods if detected_moods else ['relaxed']  # Default
+        # Remove negated moods from detected moods
+        final_moods = [m for m in detected_moods if m not in negated_moods]
+        
+        return final_moods if final_moods else ['relaxed']  # Default
     
     def filter_by_mood(self, movies: List[Dict[str, Any]], moods: List[str]) -> List[Dict[str, Any]]:
         """

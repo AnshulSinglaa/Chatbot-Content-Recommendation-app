@@ -3,7 +3,11 @@ RAG (Retrieval-Augmented Generation) pipeline for movie recommendations.
 Uses LangChain for LLM integration and context management.
 """
 import os
+import time
+import logging
 from typing import List, Dict, Any
+
+logger = logging.getLogger(__name__)
 from dotenv import load_dotenv
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
@@ -11,6 +15,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from vector_store import VectorStore
 from mood_filter import MoodFilter
 from cache import get_cache, set_cache
+
 # Load environment variables from .env file
 load_dotenv()
 
@@ -18,17 +23,17 @@ load_dotenv()
 class RAGPipeline:
     """RAG pipeline for generating movie recommendations with explanations."""
     
-    def __init__(self, vector_store: VectorStore, llm_model: str = "llama-3.1-8b-instant", temperature: float = 0.7):
+    def __init__(self, vector_store: VectorStore, llm_model: str = None, temperature: float = 0.7):
         """
         Initialize the RAG pipeline.
         
         Args:
             vector_store: Initialized VectorStore instance
-            llm_model: Groq model name (default: llama-3.1-70b-versatile)
+            llm_model: Groq model name (default: from GROQ_MODEL env var or llama-3.1-8b-instant)
             temperature: LLM temperature for response generation
         """
         self.vector_store = vector_store
-        self.llm_model = llm_model
+        self.llm_model = llm_model or os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
         self.temperature = temperature
         self.llm = None
         self.conversation_history = []
@@ -47,10 +52,37 @@ class RAGPipeline:
         
         # Initialize Groq LLM
         self.llm = ChatGroq(
-            model=llm_model,
+            model=self.llm_model,
             temperature=temperature,
             groq_api_key=api_key
         )
+    
+    def _invoke_llm_with_retry(self, messages, max_retries: int = 3) -> str:
+        """
+        Invoke the LLM with retry logic and exponential backoff.
+        
+        Args:
+            messages: Chat messages to send
+            max_retries: Maximum number of retry attempts
+            
+        Returns:
+            LLM response text, or None if all retries fail
+        """
+        for attempt in range(max_retries):
+            try:
+                response = self.llm.invoke(messages)
+                return response.content
+            except Exception as e:
+                wait_time = 2 ** attempt  # 1s, 2s, 4s
+                logger.warning(f"LLM call failed (attempt {attempt + 1}/{max_retries}): {e}")
+                if attempt < max_retries - 1:
+                    time.sleep(wait_time)
+        
+        logger.error("All LLM retry attempts failed.")
+        return None
+    
+    # Minimum cosine similarity score to include a FAISS result
+    MIN_RELEVANCE_SCORE = 0.3
     
     def retrieve_movies(self, query: str, k: int = 10) -> List[Dict[str, Any]]:
         """
@@ -63,8 +95,15 @@ class RAGPipeline:
         Returns:
             List of retrieved movie documents
         """
-        results = self.vector_store.search(query, k=k)
-        return [doc for doc, score in results]
+        try:
+            results = self.vector_store.search(query, k=k)
+            # Filter by minimum relevance score to avoid low-quality results
+            filtered = [doc for doc, score in results if score >= self.MIN_RELEVANCE_SCORE]
+            # If filtering removed everything, return top results regardless
+            return filtered if filtered else [doc for doc, score in results[:k]]
+        except Exception as e:
+            logger.error(f"FAISS search failed: {e}")
+            return []
     
     def format_movie_context(self, movies: List[Dict[str, Any]]) -> str:
         """
@@ -167,18 +206,41 @@ Relevant Movies:
 Please recommend {num_recommendations} movies that best match the user's query. 
 Provide a brief explanation for each recommendation explaining why it fits their request."""
         
-        # Generate response
+        # Generate response with retry logic
         messages = [
             SystemMessage(content=system_prompt),
             HumanMessage(content=user_prompt)
         ]
         
-        response = self.llm.invoke(messages)
-        recommendation_text = response.content
+        recommendation_text = self._invoke_llm_with_retry(messages)
         
-        # Update conversation history
+        # Graceful fallback: if LLM fails, return retrieved movies without LLM explanation
+        if recommendation_text is None:
+            logger.warning("LLM unavailable — returning raw retrieval results as fallback.")
+            fallback_recs = []
+            for movie in retrieved_movies[:5]:
+                fallback_recs.append({
+                    'title': movie['title'],
+                    'genres': movie['genres'],
+                    'rating': movie['rating'],
+                    'popularity': movie.get('popularity', 0),
+                    'overview': movie['overview'],
+                    'explanation': 'Recommended based on semantic similarity to your query.'
+                })
+            return {
+                'recommendations': fallback_recs,
+                'raw_response': '(LLM unavailable — showing top matches)',
+                'retrieved_count': len(retrieved_movies)
+            }
+        
+        # Update conversation history and enforce a sliding window
         self.conversation_history.append(f"User: {query}")
         self.conversation_history.append(f"Assistant: {recommendation_text}")
+        
+        # Keep maximum of 10 messages (5 user-assistant turns)
+        max_history_length = 10
+        if len(self.conversation_history) > max_history_length:
+            self.conversation_history = self.conversation_history[-max_history_length:]
         
         # Parse recommendations (simple extraction)
         recommendations = self._parse_recommendations(recommendation_text, retrieved_movies)

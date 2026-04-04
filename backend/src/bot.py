@@ -1,20 +1,11 @@
 """
-Main application entry point for the Movie Recommendation Chatbot.
-Provides a CLI interface for interacting with the RAG-based recommendation system.
+Movie Recommendation Bot Core logic
 """
 import os
 import sys
-from pathlib import Path
-from dotenv import load_dotenv
 from data_loader import DataLoader
 from vector_store import VectorStore
 from rag_pipeline import RAGPipeline
-
-# Load environment variables
-load_dotenv()
-
-# Add src to path
-sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 class MovieRecommendationBot:
     """Main chatbot application."""
@@ -150,32 +141,3 @@ class MovieRecommendationBot:
             except Exception as e:
                 print(f"\n❌ Error: {e}")
                 print("Please try again or type 'quit' to exit.")
-
-
-def main():
-    """Main entry point."""
-    bot = MovieRecommendationBot()
-    
-    # Check if vector store exists
-    vector_store_path = "vector_store/faiss_index"
-    force_rebuild = False
-    
-    if len(sys.argv) > 1 and sys.argv[1] == "--rebuild":
-        force_rebuild = True
-        print("Rebuilding vector store...")
-    
-    # Initialize
-    data_path = "data/tmdb_top_movies_cleaned.csv"
-    if not os.path.exists(data_path):
-        print(f"Error: Dataset not found at {data_path}")
-        print("Please ensure the CSV file is in the data/ directory.")
-        sys.exit(1)
-    
-    bot.initialize(data_path, force_rebuild=force_rebuild)
-    
-    # Start chat
-    bot.chat()
-
-
-if __name__ == "__main__":
-    main()

@@ -19,9 +19,17 @@ vector_store/
 *.index
 *.pkl
 
+# Databases / Auth Data
+*.db
+*.sqlite
+*.sqlite3
+users.db
+
 # Environment variables
 .env
 .env.local
+.env.production
+.env.*
 
 # IDE
 .vscode/
